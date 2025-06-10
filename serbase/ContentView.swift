@@ -7,52 +7,98 @@
 
 import SwiftUI
 
-struct ContentView: View {
-    @State private var selectedFilter = "All Items"
-    @State private var selectedSidebarItem = "Library"
-    @State private var searchText = ""
+// 사이드바 항목을 관리하기 위한 열거형 추가
+enum SidebarNavigationItem: String, Identifiable, CaseIterable, Hashable {
+    // Photos
+    case library = "Library"
+    case favorites = "Favorites"
+    case recentlySaved = "Recently Saved"
+    case mapLocation = "Map"
 
-    let filterOptions = ["All Items", "Photos", "Videos", "Live Photos"]
+    // Collections
+    case days = "Days"
+    case peopleAndPets = "People & Pets"
+    case memories = "Memories"
+    case trips = "Trips"
+    case featuredPhotos = "Featured Photos"
+
+    // Albums
+    case albums = "Albums"
+    case mediaTypes = "Media Types"
+    case utilities = "Utilities"
+    case projects = "Projects"
+
+    // Sharing
+    case sharedAlbums = "Shared Albums"
+
+    var id: String { self.rawValue }
+
+    var iconName: String {
+        switch self {
+        case .library: return "photo.on.rectangle.angled"
+        case .favorites: return "heart.fill"
+        case .recentlySaved: return "clock.fill"
+        case .mapLocation: return "map.fill"
+        case .days: return "calendar"
+        case .peopleAndPets: return "person.2.fill"
+        case .memories: return "star.fill"
+        case .trips: return "airplane"
+        case .featuredPhotos: return "sparkles"
+        case .albums: return "rectangle.stack.fill"
+        case .mediaTypes: return "play.rectangle.fill"
+        case .utilities: return "folder.badge.gearshape"
+        case .projects: return "hammer.fill"
+        case .sharedAlbums: return "person.2.crop.square.stack.fill"
+        }
+    }
+}
+
+struct ContentView: View {
+    @State private var selectedSidebarItem: SidebarNavigationItem? = .library
+    @StateObject private var photoManager = PhotoLibraryManager()
 
     var body: some View {
         NavigationSplitView {
-            SidebarView(selectedItem: $selectedSidebarItem)
-        } content: {
-            // 중간 패널은 비워두거나 필요에 따라 추가
-            EmptyView()
+            SidebarView(selectedItem: $selectedSidebarItem, photoManager: photoManager)
         } detail: {
-            MainContentView(selectedFilter: $selectedFilter, searchText: $searchText, filterOptions: filterOptions)
+            MainContentView(selectedCollection: selectedSidebarItem, photoManager: photoManager)
         }
-        .navigationSplitViewStyle(.balanced)
     }
 }
 
 struct SidebarView: View {
-    @Binding var selectedItem: String
+    @Binding var selectedItem: SidebarNavigationItem?
+    @ObservedObject var photoManager: PhotoLibraryManager
 
     var body: some View {
         List(selection: $selectedItem) {
-            Section {
-                SidebarRow(icon: "folder.fill", title: "Library", selectedItem: $selectedItem)
-                SidebarRow(icon: "heart.fill", title: "Favorites", selectedItem: $selectedItem)
-                SidebarRow(icon: "clock.fill", title: "Recently Saved", selectedItem: $selectedItem)
-                SidebarRow(icon: "map.fill", title: "Map", selectedItem: $selectedItem)
+            Section("Photos") {
+                ForEach([SidebarNavigationItem.library, .favorites, .recentlySaved, .mapLocation], id: \.self) { item in
+                    SidebarRow(item: item)
+                }
             }
 
-            Section {
-                SidebarRow(icon: "calendar", title: "Days", selectedItem: $selectedItem)
-                SidebarRow(icon: "person.2.fill", title: "People & Pets", selectedItem: $selectedItem)
-                SidebarRow(icon: "star.fill", title: "Memories", selectedItem: $selectedItem)
-                SidebarRow(icon: "airplane", title: "Trips", selectedItem: $selectedItem)
-                SidebarRow(icon: "sparkles", title: "Featured Photos", selectedItem: $selectedItem)
-                SidebarRow(icon: "rectangle.stack.fill", title: "Albums", selectedItem: $selectedItem)
-                SidebarRow(icon: "play.rectangle.fill", title: "Media Types", selectedItem: $selectedItem)
-                SidebarRow(icon: "folder.badge.gearshape", title: "Utilities", selectedItem: $selectedItem)
-                SidebarRow(icon: "hammer.fill", title: "Projects", selectedItem: $selectedItem)
+            Section("Collections") {
+                ForEach([SidebarNavigationItem.days, .peopleAndPets, .memories, .trips, .featuredPhotos], id: \.self) { item in
+                     SidebarRow(item: item)
+                }
             }
-
-            Section("Sharing") {
-                SidebarRow(icon: "person.2.crop.square.stack.fill", title: "Shared Albums", selectedItem: $selectedItem)
+            
+            Section {
+                Button(action: {
+                    photoManager.openFilePicker()
+                }) {
+                    Label("Import...", systemImage: "square.and.arrow.down")
+                }
+                .buttonStyle(.plain)
+                
+                DisclosureGroup("Albums") {
+                    Text("My Album 1").padding(.leading)
+                    Text("My Album 2").padding(.leading)
+                }
+                DisclosureGroup("Sharing") {
+                    Text("Shared Album 1").padding(.leading)
+                }
             }
         }
         .listStyle(SidebarListStyle())
@@ -61,183 +107,73 @@ struct SidebarView: View {
 }
 
 struct SidebarRow: View {
-    let icon: String
-    let title: String
-    @Binding var selectedItem: String
-
+    let item: SidebarNavigationItem
+    
     var body: some View {
-        HStack {
-            Image(systemName: icon)
-                .foregroundColor(.accentColor)
-                .frame(width: 16)
-            Text(title)
-            Spacer()
-        }
-        .contentShape(Rectangle())
-        .onTapGesture {
-            selectedItem = title
-        }
+        Label(item.rawValue, systemImage: item.iconName)
     }
 }
 
 struct MainContentView: View {
-    @Binding var selectedFilter: String
-    @Binding var searchText: String
-    let filterOptions: [String]
+    let selectedCollection: SidebarNavigationItem?
+    @ObservedObject var photoManager: PhotoLibraryManager
 
     var body: some View {
-        VStack(spacing: 0) {
-            // 상단 툴바
-            TopToolbarView(selectedFilter: $selectedFilter, searchText: $searchText, filterOptions: filterOptions)
-
-            // 날짜 헤더
+        ZStack(alignment: .topLeading) {
+            PhotoGridView(photos: photoManager.photos)
             DateHeaderView()
-
-            // 사진 그리드
-            PhotoGridView()
         }
-    }
-}
-
-struct TopToolbarView: View {
-    @Binding var selectedFilter: String
-    @Binding var searchText: String
-    let filterOptions: [String]
-
-    var body: some View {
-        HStack {
-            // 네비게이션 버튼들
-            HStack(spacing: 16) {
-                Button(action: {}) {
-                    Image(systemName: "chevron.left")
-                }
-                Button(action: {}) {
-                    Image(systemName: "chevron.right")
-                }
-            }
-            .buttonStyle(PlainButtonStyle())
-
-            Spacer()
-
-            // 뷰 컨트롤
-            HStack {
-                Text("Years")
-                Text("Months")
-                Text("All Photos")
-                    .fontWeight(.medium)
-            }
-            .font(.system(size: 13))
-
-            Spacer()
-
-            // 검색 및 필터
-            HStack {
-                // 검색바
-                HStack {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundColor(.secondary)
-                    TextField("Search", text: $searchText)
-                        .textFieldStyle(PlainTextFieldStyle())
-                }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(Color(.controlBackgroundColor))
-                .cornerRadius(6)
-                .frame(width: 150)
-
-                // 필터 드롭다운
-                Menu {
-                    ForEach(filterOptions, id: \.self) { option in
-                        Button(option) {
-                            selectedFilter = option
-                        }
-                    }
-                } label: {
-                    HStack {
-                        Text("Filter By: \(selectedFilter)")
-                        Image(systemName: "chevron.down")
-                    }
-                    .font(.system(size: 12))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color(.controlBackgroundColor))
-                    .cornerRadius(6)
-                }
-                .menuStyle(BorderlessButtonMenuStyle())
-            }
+        .background(Color(nsColor: .windowBackgroundColor))
+        .onAppear {
+            photoManager.requestAuthorization()
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-        .background(Color(.windowBackgroundColor))
     }
 }
 
 struct DateHeaderView: View {
     var body: some View {
-        HStack {
-            Text("Mar 15, 2024")
-                .font(.title2)
-                .fontWeight(.medium)
-                .foregroundColor(.white)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(Color.black.opacity(0.7))
-                .cornerRadius(8)
-
-            Spacer()
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 8)
-        .padding(.bottom, 12)
+        Text("Mar 15, 2024")
+            .font(.headline)
+            .fontWeight(.medium)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .padding()
     }
 }
 
 struct PhotoGridView: View {
-    let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 5)
-
-    // 샘플 사진 데이터
-    let photos = Array(0..<25).map { index in
-        PhotoItem(id: index, imageName: "photo_\(index)")
-    }
+    let photos: [PhotoItem]
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
 
     var body: some View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 4) {
-                ForEach(photos) { photo in
-                    PhotoThumbnailView(photo: photo)
+                if photos.isEmpty {
+                    ForEach(0..<50) { _ in
+                        Rectangle()
+                            .fill(Color(nsColor: .controlBackgroundColor))
+                            .aspectRatio(1, contentMode: .fill)
+                    }
+                } else {
+                    ForEach(photos) { photo in
+                        PhotoThumbnailView(photo: photo)
+                    }
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal)
         }
     }
 }
 
 struct PhotoThumbnailView: View {
     let photo: PhotoItem
-    @State private var isHovered = false
 
     var body: some View {
-        Rectangle()
-            .fill(Color.gray.opacity(0.3))
-            .aspectRatio(1, contentMode: .fit)
-            .overlay(
-                // 실제 앱에서는 이미지를 로드
-                Image(systemName: "photo")
-                    .font(.system(size: 24))
-                    .foregroundColor(.gray)
-            )
-            .overlay(
-                // 호버 효과
-                Rectangle()
-                    .fill(Color.white.opacity(isHovered ? 0.2 : 0))
-                    .animation(.easeInOut(duration: 0.15), value: isHovered)
-            )
-            .cornerRadius(8)
-            .onHover { hovering in
-                isHovered = hovering
-            }
+        Image(nsImage: photo.image)
+            .resizable()
+            .aspectRatio(1, contentMode: .fill)
             .onTapGesture {
-                // 사진 선택 로직
                 print("Selected photo: \(photo.id)")
             }
     }
@@ -245,8 +181,8 @@ struct PhotoThumbnailView: View {
 
 // 데이터 모델
 struct PhotoItem: Identifiable {
-    let id: Int
-    let imageName: String
+    let id: String
+    let image: NSImage
 }
 
 // 프리뷰
