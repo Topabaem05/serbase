@@ -55,18 +55,20 @@ enum SidebarNavigationItem: String, Identifiable, CaseIterable, Hashable {
 
 struct ContentView: View {
     @State private var selectedSidebarItem: SidebarNavigationItem? = .library
+    @StateObject private var photoManager = PhotoLibraryManager()
 
     var body: some View {
         NavigationSplitView {
-            SidebarView(selectedItem: $selectedSidebarItem)
+            SidebarView(selectedItem: $selectedSidebarItem, photoManager: photoManager)
         } detail: {
-            MainContentView(selectedCollection: selectedSidebarItem)
+            MainContentView(selectedCollection: selectedSidebarItem, photoManager: photoManager)
         }
     }
 }
 
 struct SidebarView: View {
     @Binding var selectedItem: SidebarNavigationItem?
+    @ObservedObject var photoManager: PhotoLibraryManager
 
     var body: some View {
         List(selection: $selectedItem) {
@@ -83,6 +85,13 @@ struct SidebarView: View {
             }
             
             Section {
+                Button(action: {
+                    photoManager.openFilePicker()
+                }) {
+                    Label("Import...", systemImage: "square.and.arrow.down")
+                }
+                .buttonStyle(.plain)
+                
                 DisclosureGroup("Albums") {
                     Text("My Album 1").padding(.leading)
                     Text("My Album 2").padding(.leading)
@@ -107,13 +116,17 @@ struct SidebarRow: View {
 
 struct MainContentView: View {
     let selectedCollection: SidebarNavigationItem?
+    @ObservedObject var photoManager: PhotoLibraryManager
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            PhotoGridView()
+            PhotoGridView(photos: photoManager.photos)
             DateHeaderView()
         }
         .background(Color(nsColor: .windowBackgroundColor))
+        .onAppear {
+            photoManager.requestAuthorization()
+        }
     }
 }
 
@@ -130,24 +143,25 @@ struct DateHeaderView: View {
 }
 
 struct PhotoGridView: View {
+    let photos: [PhotoItem]
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
-
-    private let photos = Array(0..<50).map { index in
-        PhotoItem(id: index, imageName: "photo_\(index)")
-    }
 
     var body: some View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 4) {
-                ForEach(photos) { photo in
-                    PhotoThumbnailView(photo: photo)
+                if photos.isEmpty {
+                    ForEach(0..<50) { _ in
+                        Rectangle()
+                            .fill(Color(nsColor: .controlBackgroundColor))
+                            .aspectRatio(1, contentMode: .fill)
+                    }
+                } else {
+                    ForEach(photos) { photo in
+                        PhotoThumbnailView(photo: photo)
+                    }
                 }
             }
             .padding(.horizontal)
-        }
-        .onAppear {
-            // TODO: 이곳에서 사진을 로드하는 로직을 구현합니다.
-            print("PhotoGridView appeared. Implement photo loading here.")
         }
     }
 }
@@ -156,18 +170,9 @@ struct PhotoThumbnailView: View {
     let photo: PhotoItem
 
     var body: some View {
-        Rectangle()
-            .fill(Color(
-                hue: .random(in: 0...1),
-                saturation: .random(in: 0.5...0.7),
-                brightness: .random(in: 0.8...0.9)
-            ))
+        Image(nsImage: photo.image)
+            .resizable()
             .aspectRatio(1, contentMode: .fill)
-            .overlay(
-                Image(systemName: "photo")
-                    .font(.system(size: 24))
-                    .foregroundColor(.white.opacity(0.6))
-            )
             .onTapGesture {
                 print("Selected photo: \(photo.id)")
             }
@@ -176,8 +181,8 @@ struct PhotoThumbnailView: View {
 
 // 데이터 모델
 struct PhotoItem: Identifiable {
-    let id: Int
-    let imageName: String
+    let id: String
+    let image: NSImage
 }
 
 // 프리뷰
