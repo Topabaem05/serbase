@@ -166,13 +166,10 @@ struct MainContentView: View {
                 PhotoMapView(photos: photoManager.filteredPhotos)
             } else if selectedCollection == .days {
                 GroupedPhotoGridView(groupedPhotos: photoManager.groupedPhotos)
+            } else if selectedCollection == .peopleAndPets {
+                PeopleAlbumsView()
             } else {
-                ZStack(alignment: .topLeading) {
-                    PhotoGridView(photos: photoManager.filteredPhotos)
-                    if selectedCollection == .library {
-                        DateHeaderView()
-                    }
-                }
+                PhotoGridView(photos: photoManager.filteredPhotos)
             }
         }
         .background(Color(nsColor: .windowBackgroundColor))
@@ -213,22 +210,54 @@ struct PhotoMapView: View {
 
 struct GroupedPhotoGridView: View {
     let groupedPhotos: [(date: Date, photos: [PhotoItem])]
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
     @State private var selectedPhotoForInfo: PhotoItem?
+    @State private var thumbnailSize: Double = 100.0
+    
+    // 동적으로 컬럼 수 계산
+    private var dynamicColumns: [GridItem] {
+        let screenWidth = NSScreen.main?.frame.width ?? 1200
+        let availableWidth = screenWidth - 40 // 패딩 고려
+        let columnCount = max(3, Int(availableWidth / (thumbnailSize + 8))) // spacing 고려
+        return Array(repeating: GridItem(.flexible(), spacing: 8), count: columnCount)
+    }
     
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                ForEach(groupedPhotos, id: \.date) { group in
-                    GroupDateHeaderView(date: group.date)
-                    LazyVGrid(columns: columns, spacing: 4) {
-                        ForEach(group.photos) { photo in
-                            PhotoThumbnailView(photo: photo, selectedPhotoForInfo: $selectedPhotoForInfo)
+        VStack {
+            // 확대/축소 컨트롤
+            HStack {
+                Image(systemName: "photo")
+                    .foregroundColor(.secondary)
+                Slider(value: $thumbnailSize, in: 60...200, step: 10)
+                    .frame(maxWidth: 200)
+                Image(systemName: "photo")
+                    .foregroundColor(.secondary)
+                    .font(.title2)
+                
+                Spacer()
+                
+                Text("\(Int(thumbnailSize))px")
+                    .foregroundColor(.secondary)
+                    .font(.caption)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 4))
+            }
+            .padding(.horizontal)
+            .padding(.top, 8)
+            
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    ForEach(groupedPhotos, id: \.date) { group in
+                        GroupDateHeaderView(date: group.date)
+                        LazyVGrid(columns: dynamicColumns, spacing: 8) {
+                            ForEach(group.photos) { photo in
+                                PhotoThumbnailView(photo: photo, selectedPhotoForInfo: $selectedPhotoForInfo, thumbnailSize: thumbnailSize)
+                            }
                         }
                     }
                 }
+                .padding()
             }
-            .padding()
         }
         .sheet(item: $selectedPhotoForInfo) { photo in
             PhotoInfoView(photo: photo)
@@ -252,43 +281,80 @@ struct GroupDateHeaderView: View {
     }
 }
 
-struct DateHeaderView: View {
-    var body: some View {
-        Text("Mar 15, 2024")
-            .font(.headline)
-            .fontWeight(.medium)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .padding()
-    }
-}
-
 struct PhotoGridView: View {
     let photos: [PhotoItem]
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
     @State private var selectedPhotoForDetail: PhotoItem?
     @State private var selectedPhotoForInfo: PhotoItem?
+    @State private var thumbnailSize: Double = 100.0 // 썸네일 크기 조절용
+    @EnvironmentObject var photoManager: PhotoLibraryManager
+    
+    // 동적으로 컬럼 수 계산
+    private var dynamicColumns: [GridItem] {
+        let screenWidth = NSScreen.main?.frame.width ?? 1200
+        let availableWidth = screenWidth - 40 // 패딩 고려
+        let columnCount = max(3, Int(availableWidth / (thumbnailSize + 8))) // spacing 고려
+        return Array(repeating: GridItem(.flexible(), spacing: 8), count: columnCount)
+    }
 
     var body: some View {
-        ScrollView {
-            LazyVGrid(columns: columns, spacing: 4) {
-                if photos.isEmpty {
-                    ForEach(0..<50) { _ in
-                        Rectangle()
-                            .fill(Color(nsColor: .controlBackgroundColor))
-                            .aspectRatio(1, contentMode: .fill)
+        VStack {
+            if photos.isEmpty {
+                // 빈 상태 뷰
+                VStack(spacing: 16) {
+                    Image(systemName: "photo.badge.plus")
+                        .font(.system(size: 50))
+                        .foregroundColor(.secondary)
+                    Text("현재 불러온 이미지가 없습니다.")
+                        .font(.title2)
+                        .foregroundColor(.secondary)
+                    
+                    Button("이미지 불러오기") {
+                        photoManager.openFilePicker()
                     }
-                } else {
-                    ForEach(photos) { photo in
-                        PhotoThumbnailView(photo: photo, selectedPhotoForInfo: $selectedPhotoForInfo)
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(nsColor: .windowBackgroundColor))
+            } else {
+                // 확대/축소 컨트롤
+                HStack {
+                    Image(systemName: "photo")
+                        .foregroundColor(.secondary)
+                    Slider(value: $thumbnailSize, in: 60...200, step: 10)
+                        .frame(maxWidth: 200)
+                    Image(systemName: "photo")
+                        .foregroundColor(.secondary)
+                        .font(.title2)
+                    
+                    Spacer()
+                    
+                    Text("\(Int(thumbnailSize))px")
+                        .foregroundColor(.secondary)
+                        .font(.caption)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 4))
+                }
+                .padding(.horizontal)
+                .padding(.top, 8)
+                
+                ScrollView {
+                    LazyVGrid(columns: dynamicColumns, spacing: 8) {
+                        ForEach(photos) { photo in
+                            PhotoThumbnailView(
+                                photo: photo, 
+                                selectedPhotoForInfo: $selectedPhotoForInfo,
+                                thumbnailSize: thumbnailSize
+                            )
                             .onTapGesture(count: 2) {
                                 selectedPhotoForDetail = photo
                             }
+                        }
                     }
+                    .padding(.horizontal)
                 }
             }
-            .padding(.horizontal)
         }
         .sheet(item: $selectedPhotoForDetail) { photo in
             FullScreenPhotoView(photo: photo, isPresented: .constant(true))
@@ -303,12 +369,29 @@ struct PhotoThumbnailView: View {
     let photo: PhotoItem
     @Binding var selectedPhotoForInfo: PhotoItem?
     @EnvironmentObject var photoManager: PhotoLibraryManager
+    let thumbnailSize: Double
+    
+    init(photo: PhotoItem, selectedPhotoForInfo: Binding<PhotoItem?>, thumbnailSize: Double = 100.0) {
+        self.photo = photo
+        self._selectedPhotoForInfo = selectedPhotoForInfo
+        self.thumbnailSize = thumbnailSize
+    }
 
     var body: some View {
-        Image(nsImage: photo.image)
-            .resizable()
-            .aspectRatio(1, contentMode: .fill)
-            .overlay(alignment: .bottomTrailing) {
+        ZStack {
+            // 투명한 사각형 배경
+            Rectangle()
+                .fill(Color.clear)
+                .frame(width: thumbnailSize, height: thumbnailSize)
+            
+            // 원본 비율을 유지하는 이미지
+            Image(nsImage: photo.image)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(maxWidth: thumbnailSize, maxHeight: thumbnailSize)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 4))
+        .overlay(alignment: .bottomTrailing) {
                 if photo.isFavorite {
                     Image(systemName: "heart.fill")
                         .foregroundColor(.white)
