@@ -117,11 +117,26 @@ struct SidebarRow: View {
 struct MainContentView: View {
     let selectedCollection: SidebarNavigationItem?
     @ObservedObject var photoManager: PhotoLibraryManager
+    @State private var gridColumns: Double = 7
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            PhotoGridView(photos: photoManager.photos)
-            DateHeaderView()
+        VStack(spacing: 0) {
+            // 슬라이더 컨트롤 영역
+            HStack {
+                Image(systemName: "square.grid.2x2")
+                    .foregroundColor(.secondary)
+                Slider(value: $gridColumns, in: 3...15, step: 1)
+                    .frame(width: 150)
+                Image(systemName: "square.grid.3x3")
+                    .foregroundColor(.secondary)
+                Spacer()
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+            .background(.regularMaterial)
+            
+            PhotoGridView(photos: photoManager.photos, columns: Int(gridColumns))
+                .environmentObject(photoManager)
         }
         .background(Color(nsColor: .windowBackgroundColor))
         .onAppear {
@@ -130,38 +145,66 @@ struct MainContentView: View {
     }
 }
 
-struct DateHeaderView: View {
+
+
+struct EmptyPhotosView: View {
+    @EnvironmentObject var photoManager: PhotoLibraryManager
+    
     var body: some View {
-        Text("Mar 15, 2024")
-            .font(.headline)
-            .fontWeight(.medium)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .padding()
+        VStack(spacing: 20) {
+            Image(systemName: "photo.on.rectangle.angled")
+                .font(.system(size: 80))
+                .foregroundColor(.secondary)
+            
+            VStack(spacing: 8) {
+                Text("현재 이미지가 없습니다.")
+                    .font(.title2)
+                    .fontWeight(.medium)
+                    .foregroundColor(.primary)
+                
+                Button(action: {
+                    photoManager.openFilePicker()
+                }) {
+                    Text("이미지를 추가해주세요")
+                        .font(.body)
+                        .foregroundColor(.blue)
+                        .underline()
+                }
+                .buttonStyle(.plain)
+                .onHover { hovering in
+                    if hovering {
+                        NSCursor.pointingHand.push()
+                    } else {
+                        NSCursor.pop()
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(nsColor: .windowBackgroundColor))
     }
 }
 
 struct PhotoGridView: View {
     let photos: [PhotoItem]
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
+    let columns: Int
+    
+    private var gridColumns: [GridItem] {
+        Array(repeating: GridItem(.flexible(), spacing: 4), count: columns)
+    }
 
     var body: some View {
         ScrollView {
-            LazyVGrid(columns: columns, spacing: 4) {
-                if photos.isEmpty {
-                    ForEach(0..<50) { _ in
-                        Rectangle()
-                            .fill(Color(nsColor: .controlBackgroundColor))
-                            .aspectRatio(1, contentMode: .fill)
-                    }
-                } else {
+            if photos.isEmpty {
+                EmptyPhotosView()
+            } else {
+                LazyVGrid(columns: gridColumns, spacing: 4) {
                     ForEach(photos) { photo in
                         PhotoThumbnailView(photo: photo)
                     }
                 }
+                .padding(.horizontal)
             }
-            .padding(.horizontal)
         }
     }
 }
